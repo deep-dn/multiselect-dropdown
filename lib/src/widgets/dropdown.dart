@@ -1,8 +1,7 @@
 part of '../multi_dropdown.dart';
 
 /// Dropdown widget for the multiselect dropdown.
-///
-class _Dropdown<T> extends StatelessWidget {
+class _Dropdown<T> extends StatefulWidget {
   /// Creates a dropdown widget.
   const _Dropdown({
     required this.decoration,
@@ -56,7 +55,13 @@ class _Dropdown<T> extends StatelessWidget {
   /// Whether the selection is single.
   final bool singleSelect;
 
-  int get _selectedCount => items.where((element) => element.selected).length;
+  @override
+  State<_Dropdown<T>> createState() => _DropdownState<T>();
+}
+
+class _DropdownState<T> extends State<_Dropdown<T>> {
+  int get _selectedCount =>
+      widget.items.where((element) => element.selected).length;
 
   static const Map<ShortcutActivator, Intent> _webShortcuts =
       <ShortcutActivator, Intent>{
@@ -71,45 +76,45 @@ class _Dropdown<T> extends StatelessWidget {
     final theme = Theme.of(context);
 
     final child = Material(
-      elevation: decoration.elevation,
-      borderRadius: decoration.borderRadius,
+      elevation: widget.decoration.elevation,
+      borderRadius: widget.decoration.borderRadius,
       clipBehavior: Clip.antiAlias,
-      color: decoration.backgroundColor,
-      surfaceTintColor: decoration.backgroundColor,
+      color: widget.decoration.backgroundColor,
+      surfaceTintColor: widget.decoration.backgroundColor,
       child: Focus(
         canRequestFocus: false,
         skipTraversal: true,
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: decoration.borderRadius,
-            color: decoration.backgroundColor,
+            borderRadius: widget.decoration.borderRadius,
+            color: widget.decoration.backgroundColor,
             backgroundBlendMode: BlendMode.dstATop,
           ),
           constraints: BoxConstraints(
-            maxWidth: width,
-            maxHeight: decoration.maxHeight,
+            maxWidth: widget.width,
+            maxHeight: widget.decoration.maxHeight,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (searchEnabled)
+              if (widget.searchEnabled)
                 _SearchField(
-                  decoration: searchDecoration,
+                  decoration: widget.searchDecoration,
                   onChanged: _onSearchChange,
                 ),
-              if (decoration.header != null)
-                Flexible(child: decoration.header!),
+              if (widget.decoration.header != null)
+                Flexible(child: widget.decoration.header!),
               Flexible(
                 child: ListView.separated(
                   separatorBuilder: (_, __) =>
-                      itemSeparator ?? const SizedBox.shrink(),
+                      widget.itemSeparator ?? const SizedBox.shrink(),
                   shrinkWrap: true,
-                  itemCount: items.length,
+                  itemCount: widget.items.length,
                   itemBuilder: (_, int index) => _buildOption(index, theme),
                 ),
               ),
-              if (items.isEmpty && searchEnabled)
+              if (widget.items.isEmpty && widget.searchEnabled)
                 Padding(
                   padding: const EdgeInsets.all(12),
                   child: Text(
@@ -118,8 +123,8 @@ class _Dropdown<T> extends StatelessWidget {
                     style: theme.textTheme.bodyMedium,
                   ),
                 ),
-              if (decoration.footer != null)
-                Flexible(child: decoration.footer!),
+              if (widget.decoration.footer != null)
+                Flexible(child: widget.decoration.footer!),
             ],
           ),
         ),
@@ -134,62 +139,83 @@ class _Dropdown<T> extends StatelessWidget {
   }
 
   Widget _buildOption(int index, ThemeData theme) {
-    final option = items[index];
+    final option = widget.items[index];
 
-    if (itemBuilder != null) {
-      return itemBuilder!(option, index, () => onItemTap(option));
+    if (widget.itemBuilder != null) {
+      return widget.itemBuilder!(option, index, () => _handleItemTap(option));
     }
 
-    final disabledColor = dropdownItemDecoration.disabledBackgroundColor ??
-        dropdownItemDecoration.backgroundColor?.withAlpha(100);
+    final disabledColor =
+        widget.dropdownItemDecoration.disabledBackgroundColor ??
+            widget.dropdownItemDecoration.backgroundColor?.withAlpha(100);
 
     final tileColor = option.disabled
         ? disabledColor
         : option.selected
-            ? dropdownItemDecoration.selectedBackgroundColor
-            : dropdownItemDecoration.backgroundColor;
+            ? widget.dropdownItemDecoration.selectedBackgroundColor ??
+                Colors.blue.shade200
+            : widget.dropdownItemDecoration.backgroundColor ?? Colors.white;
+
+    final textColor = option.selected
+        ? widget.dropdownItemDecoration.selectedTextColor ?? Colors.black
+        : widget.dropdownItemDecoration.textColor ??
+            theme.colorScheme.onSurface;
 
     final trailing = option.disabled
-        ? dropdownItemDecoration.disabledIcon
+        ? widget.dropdownItemDecoration.disabledIcon
         : option.selected
-            ? dropdownItemDecoration.selectedIcon
+            ? widget.dropdownItemDecoration.selectedIcon
             : null;
 
     return Ink(
+      color: tileColor, // Ensure tile color is applied
       child: ListTile(
-        title: Text(option.label),
+        title: Text(
+          option.label,
+          style: TextStyle(
+            color: textColor, // Ensure text color updates when selected
+            fontWeight: option.selected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
         trailing: trailing,
         dense: true,
-        autofocus: true,
         enabled: !option.disabled,
         selected: option.selected,
         visualDensity: VisualDensity.adaptivePlatformDensity,
-        focusColor: dropdownItemDecoration.backgroundColor?.withAlpha(100),
-        selectedColor: dropdownItemDecoration.selectedTextColor ??
-            theme.colorScheme.onSurface,
-        textColor:
-            dropdownItemDecoration.textColor ?? theme.colorScheme.onSurface,
-        tileColor: tileColor ?? Colors.transparent,
-        selectedTileColor: dropdownItemDecoration.selectedBackgroundColor ??
-            Colors.grey.shade200,
-        onTap: () {
-          if (option.disabled) return;
-
-          if (singleSelect || !_reachedMaxSelection(option)) {
-            onItemTap(option);
-            return;
-          }
-        },
+        tileColor: tileColor,
+        // Apply background color to selected item
+        selectedTileColor:
+            widget.dropdownItemDecoration.selectedBackgroundColor ??
+                Colors.blueAccent,
+        onTap: () => _handleItemTap(option),
       ),
     );
   }
 
-  void _onSearchChange(String value) => onSearchChange?.call(value);
+  void _handleItemTap(DropdownItem<T> option) {
+    if (option.disabled) return;
+
+    setState(() {
+      if (widget.singleSelect) {
+        // Clear all selections before selecting the new one
+        for (var item in widget.items) {
+          item.selected = false;
+        }
+        option.selected = true;
+      } else if (!_reachedMaxSelection(option)) {
+        option.selected = !option.selected;
+      }
+
+      widget.onItemTap(option);
+    });
+  }
+
+  void _onSearchChange(String value) => widget.onSearchChange?.call(value);
 
   bool _reachedMaxSelection(DropdownItem<dynamic> option) {
     return !option.selected &&
-        maxSelections > 0 &&
-        _selectedCount >= maxSelections;
+        widget.maxSelections > 0 &&
+        _selectedCount >= widget.maxSelections;
   }
 }
 
@@ -200,7 +226,6 @@ class _SearchField extends StatelessWidget {
   });
 
   final SearchFieldDecoration decoration;
-
   final ValueChanged<String> onChanged;
 
   @override
